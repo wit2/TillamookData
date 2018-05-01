@@ -33,43 +33,6 @@ dta1_1 <- dta1_1 %>%
 dta2 <- dta2%>%
   filter(str_detect(cn_parameters, "DO"))
 
-#gives the overall number of distinct, LASAR-numbered sites in each table.
-#Where different, indicates sampling sites not represented in one table
-count(distinct(dta1_1, lasar_id))
-count(distinct(dta1_1, site_description))
-count(distinct(dta2, lasar_id))
-count(distinct(dta2, site_description))
-#if more site descriptions than lasar_ids, some sites are improperly described.
-
-
-#these create lists that show that compare site descriptions and project names to lasar ids
-project_names_1 <- dta1_1%>%
-  select(lasar_id, project, site_description)%>%
-  arrange(lasar_id)
-project_names_2 <- dta2%>%
-  select(lasar_id, project, site_description)%>%
-  arrange(lasar_id)
-
-#This is a partial solution; it renames IDs by the first entry. I'd like to rename by the correct QAPP-listed ID.
-#NAs are excluded from this dataframe; they will have to be added back in.
-#The rest of the lasar IDs now only have one site description each.
-dta2_2a <- dta2%>%
-  filter(!is.na(lasar_id))%>%
-    group_by(lasar_id)%>%
-     mutate(site_desc = first(site_description))%>%
-      arrange(lasar_id)
-
-#this is a really hacky way of doing this but I wanted to get a full data table with it working right away.
-dta2_2b <- dta2%>%
-  filter(is.na(lasar_id))%>%
-    mutate(site_desc = site_description)
-
-dta2_2 <- full_join(dta2_2a, dta2_2b)
-
-#this displays the old site description and the new site description for each lasar ID to check for any major discrepancies.
-dta2_2 %>%
-  select(lasar_id, site_description, site_desc)
-
 A <- dta2%>%
   select(`year(s)_sampled`, `month(s)_sampled`, project, lasar_id)%>%
   arrange(`year(s)_sampled`, lasar_id)
@@ -80,3 +43,11 @@ TMDL <- dta1_1 %>%
 
 write.csv(A, file = ("C:\\Users\\awithin\\Desktop\\A.csv"))
 write.csv(TMDL, file = ("C:\\Users\\awithin\\Desktop\\TMDL.csv"))
+
+library(devtools)
+install_github(c("ropensci/tabulizerjars", "ropensci/tabulizer"), INSTALL_opts = "--no-multiarch")
+library(tabulizer)
+
+tillamooktabs <- extract_tables("\\\\deqhq1\\AWITHIN\\QAPPs\\DEQ07-LAB-0023-QAPP_2012.pdf")
+?extract_tables
+nehalnestutabs <- extract_tables("E:\\QAPPs\\DEQ11-LAB-0022-QAPP_nehaiem2013.pdf")
