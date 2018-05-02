@@ -106,3 +106,31 @@ no_duplicates <- arrange(no_duplicates, `year(s)_sampled`, lasar_id)
 write.csv(no_duplicates, file = ("C:\\Users\\awithin\\Desktop\\no_dupes.csv"))
 anti_join(join1, no_duplicates, by = c("lasar_id", "year(s)_sampled", "month(s)_sampled"))
 #returns no rows. I'm not sure I'm doing this right to get the results I want.
+
+#Creates unique vectors for the tillamook project lasar ids and the nehalem/nestucca project lasar ids
+#shows that they do not overlap
+tillamook_lasar_ids <- c("13144", "13146", "13428", "13429", "13430", "13431", "34440")
+neh_nest_lasar_ids <- c("11856", "13368", "29292", "29302", "23509", "10523", "22394", "22375", "22383", "21800")
+intersect(tillamook_lasar_ids, neh_nest_lasar_ids)
+
+#new_project_name <- no_duplicates%>%
+  #mutate(formal_project = 
+           #ifelse(lasar_id %in% c("13144", "13146", "13428", "13429", "13430", "13431", "34440"),
+                  #"Tillamook Estuary Sloughs DO 2012",
+                  #ifelse(lasar_id %in% c("11856", "13368", "29292", "29302", "23509", "10523", "22394",
+                                         #"22375", "22383", "21800"), "Nehalem and Nestucca River Basins TMDL DO 2013",
+                         #"unknown")))
+
+#same as above, a different/better way
+new_project_name <- no_duplicates%>%
+  mutate(formal_project = 
+           ifelse(lasar_id %in% tillamook_lasar_ids,
+                  "Tillamook Estuary Sloughs DO 2012",
+                  ifelse(lasar_id %in% neh_nest_lasar_ids, "Nehalem and Nestucca River Basins TMDL DO 2013",
+                         "unknown")))
+
+#rearranges the columns so the new project name can be inspected and compared more easily
+col_order <- c("year(s)_sampled", "month(s)_sampled", "project", "formal_project", "lasar_id", "site_description", "cn_parameters",
+               "link_to_data", "cn_equipment", "sub_id", "logger_id", "audit_data?", "qc_data?", "#1_coc_submitted?", "#2_data_processed?", "#3_loaded_into_awqms?",
+               "#4_released_from_element?", "notes")
+new_project_name_ordered <- new_project_name[, col_order]
