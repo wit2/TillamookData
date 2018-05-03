@@ -1,15 +1,27 @@
-library(dplyr)
-library(stringr)
+#Author: Anna Withington
+#Contact: anna.withington@gmail.com
+#Date: May 3, 2018
+#Topic: Merge lists of DO data, create master list
 
-#Problem: There are two separate lists of data sources for north coast DO that don't match up
-#and have lack of consistency within and between
+#Problem: There are two separate spreadsheets of data sources for North Coast DO that
+#have lack of consistency within and between
 #Objective 1: Clarify inconsistencies so that a non-redundant master list of data sources can be generated
 
-#this is a list that includes TMDL DO sampling outside of the north coast region.
-dta1 <- readr::read_csv("T:\\PSU TMDL Status and Trend Study\\North Coast dissolved oxygen - Anna Withington\\CSVs\\Copy of TMDL_CnDataTracking.csv")
-#this is a list authored by Adam
-dta2 <- readr::read_csv("T:\\PSU TMDL Status and Trend Study\\North Coast dissolved oxygen - Anna Withington\\CSVs\\TillamookContinuousDatasets2012-17_YJ (003).csv")
+require(dplyr)
+require(stringr)
+require(devtools)
+install_github(c("ropensci/tabulizerjars", "ropensci/tabulizer"), INSTALL_opts = "--no-multiarch")
+require(tabulizer)
+require(lubridate)
 
+# Reading data----
+#this is a list that includes TMDL DO sampling outside of the north coast region.
+dta1 <- readr::read_csv("\\\\deqhq1\\tmdl\\PSU TMDL Status and Trend Study\\North Coast dissolved oxygen - Anna Withington\\CSVs\\Copy of TMDL_CnDataTracking.csv")
+#this is a list specific to the North Coast
+dta2 <- readr::read_csv("\\\\deqhq1\\tmdl\\PSU TMDL Status and Trend Study\\North Coast dissolved oxygen - Anna Withington\\CSVs\\TillamookContinuousDatasets2012-17_YJ (003).csv")
+
+
+# Cleaning data----
 #remove spaces from column names
 names(dta1) <- gsub(" ", "_", names(dta1))
 names(dta2) <- gsub(" ", "_", names(dta2))
@@ -38,24 +50,9 @@ dta2 <- dta2%>%
   filter(str_detect(cn_parameters, "DO"))
 
 
-#this is temporary - I wanted to export files to examine them quickly side-by-side in excel
-A <- dta2%>%
-  select(`year(s)_sampled`, `month(s)_sampled`, project, lasar_id)%>%
-  arrange(`year(s)_sampled`, lasar_id)
-TMDL <- dta1 %>%
-  select(`year(s)_sampled`, `month(s)_sampled`, project, lasar_id)%>%
-  arrange(`year(s)_sampled`, lasar_id)
-write.csv(A, file = ("C:\\Users\\awithin\\Desktop\\A.csv"))
-write.csv(TMDL, file = ("C:\\Users\\awithin\\Desktop\\TMDL.csv"))
-
-
-#At this step, tables are extracted from the two QAPPs in order to get the formal site descriptions
-library(devtools)
-install_github(c("ropensci/tabulizerjars", "ropensci/tabulizer"), INSTALL_opts = "--no-multiarch")
-library(tabulizer)
-
+# Brings in site data from Tillamook Estuary Sloughs DO 2012 QAPP and Nehalem and Nestucca River Basins TMDL DO 2013 QAPP----
 tillamooktabs <- extract_tables("\\\\deqhq1\\AWITHIN\\QAPPs\\DEQ07-LAB-0023-QAPP_2012.pdf")
-nehalnestutabs <- extract_tables("E:\\QAPPs\\DEQ11-LAB-0022-QAPP_nehaiem2013.pdf")
+nehalnestutabs <- extract_tables("\\\\deqhq1\\AWITHIN\\QAPPs\\DEQ11-LAB-0022-QAPP_nehaiem2013.pdf")
 
 #creates a dataframe with the site data from the QAPP
 tillamooksites <- tillamooktabs[[6]]
@@ -66,13 +63,12 @@ colnames(tillamooksites) <- tillamooksites [1,]
 tillamooksites = tillamooksites[-c(1, 8),]
 #adds back the deleted site component to the site description
 tillamooksites[6,2] <- "Trask River at Netarts Rd. (Hwy 6)"
-tillamooksites
 #converting to dataframe solves later issue with lasar id being interpreted as character
 tillamooksites <- data.frame(tillamooksites)
 
+#same process as above, for the nehalem/nestucca QAPP site table
 nsites <- nehalnestutabs[[6]]
 nsites[1, c(1,2,3,4,5)] <- c("lasar_id", "site_description", "river_mile", "lat", "long")
-nsites
 colnames(nsites) <- nsites[1,]
 nsites = nsites[-1,]
 nsites[2,2] <- "Nehalem River at Roy Creek Campground"
@@ -86,47 +82,43 @@ nsites <- nsites[-c(1,8,10,12,13,14),]
 nsites <- data.frame(nsites)
 
 
-
-glimpse(dta1)
-dta1 <- dta1%>%
+# This step identifies entries with no LASAR IDs or LASAR IDs in neither the Tillamook nor Nehalem/Nestucca projects----
+dta1 <- dta1 %>%
   mutate_if(is.character, as.factor)
-dta2 <- dta2%>%
+dta2 <- dta2 %>%
   mutate_if(is.character, as.factor)
 not_tillamook <- anti_join(dta1, tillamooksites, "lasar_id")
 neither_till_nor_n <- anti_join(not_tillamook, nsites, "lasar_id")
 neither_till_nor_n
-#it appears that there is an additional project
+#it appears that there is an additional project, indicated by LASAR IDs 38603, 38604 38598 etc that are not in either existing QAPP
+#this table also contains data that does not have a LASAR ID, which may be impossible to resolve/use data from
 
+
+# Step to join tables----
+#joins the two tables. keeps all observations from both tables. overlaps matching columns.
 join1<- full_join(dta1, dta2, by = c("lasar_id", "project", "month(s)_sampled", "year(s)_sampled", "site_description",
                                      "cn_parameters", "logger_id", "cn_equipment", "audit_data?", "qc_data?", "link_to_data"))
 
-df [!duplicated(df[c(1,4)]),]
-no_duplicates <- join1 [!duplicated(join1[c(2,3,5)]),]
-no_duplicates <- arrange(no_duplicates, `year(s)_sampled`, lasar_id)
-write.csv(no_duplicates, file = ("C:\\Users\\awithin\\Desktop\\no_dupes.csv"))
-anti_join(join1, no_duplicates, by = c("lasar_id", "year(s)_sampled", "month(s)_sampled"))
-#returns no rows. I'm not sure I'm doing this right to get the results I want.
+# Step to remove duplicates----
 
-#Creates unique vectors for the tillamook project lasar ids and the nehalem/nestucca project lasar ids
-#shows that they do not overlap
-tillamook_lasar_ids <- c("13144", "13146", "13428", "13429", "13430", "13431", "34440")
-neh_nest_lasar_ids <- c("11856", "13368", "29292", "29302", "23509", "10523", "22394", "22375", "22383", "21800")
-intersect(tillamook_lasar_ids, neh_nest_lasar_ids)
+#in order to be removed from the dataset, the entry must be duplicated across the Month, Year, Lasar ID, logger ID, AND link to data. 
+# 81 observations were not duplicated accross these columns and added to the new dataframe
+no_duplicates <- join1[!duplicated(join1[c(2,3,5,8,10)]),]
 
-#new_project_name <- no_duplicates%>%
-  #mutate(formal_project = 
-           #ifelse(lasar_id %in% c("13144", "13146", "13428", "13429", "13430", "13431", "34440"),
-                  #"Tillamook Estuary Sloughs DO 2012",
-                  #ifelse(lasar_id %in% c("11856", "13368", "29292", "29302", "23509", "10523", "22394",
-                                         #"22375", "22383", "21800"), "Nehalem and Nestucca River Basins TMDL DO 2013",
-                         #"unknown")))
+# 43 duplicated observations were removed.
+#This will be retained in a separate table so observations can be double checked and no data will be lost.
+removed <- join1 [duplicated(join1[c(2,3,5,8,10)]),]
 
-#same as above, a different/better way
-new_project_name <- no_duplicates%>%
+union(join1, no_duplicates)
+#returns 121, indicating three complete duplicates across both tables
+
+
+# This step generates a project name based on LASAR ID----
+new_project_name <- no_duplicates %>%
   mutate(formal_project = 
-           ifelse(lasar_id %in% tillamook_lasar_ids,
+           ifelse(lasar_id %in% tillamooksites$lasar_id,
                   "Tillamook Estuary Sloughs DO 2012",
-                  ifelse(lasar_id %in% neh_nest_lasar_ids, "Nehalem and Nestucca River Basins TMDL DO 2013",
+                  ifelse(lasar_id %in% nsites$lasar_id, "Nehalem and Nestucca River Basins TMDL DO 2013",
                          "unknown")))
 
 #rearranges the columns so the new project name can be inspected and compared more easily
@@ -134,3 +126,34 @@ col_order <- c("year(s)_sampled", "month(s)_sampled", "project", "formal_project
                "link_to_data", "cn_equipment", "sub_id", "logger_id", "audit_data?", "qc_data?", "#1_coc_submitted?", "#2_data_processed?", "#3_loaded_into_awqms?",
                "#4_released_from_element?", "notes")
 new_project_name_ordered <- new_project_name[, col_order]
+
+
+#Reassign spring summer to april october
+new_project_name_ordered$`month(s)_sampled`[new_project_name_ordered$`month(s)_sampled` == "Spring Summer Fall"] <- "April October"
+
+
+#adds month sampling started column
+new_month_start <- new_project_name_ordered %>%
+  mutate(month_sample_start = word(new_project_name_ordered$`month(s)_sampled`, 1))
+new_month_start <- data.frame(new_month_start)
+
+#hmm not working
+new_month_start$month_sample_start <- as.Date(new_month_start$month_sample_start, "%B")
+glimpse(new_month_start)
+
+
+#adds month sampling ended column
+new_month_end <- new_month_start %>%
+  mutate(month_sample_end = word(new_month_start$`month(s)_sampled`, -1))
+
+
+new_unique_id <- new_month_end%>%
+  mutate(ID = 
+           ifelse(lasar_id %in% tillamooksites$lasar_id,
+                  "Tillamook Estuary Sloughs DO 2012",
+                  ifelse(lasar_id %in% nsites$lasar_id, "Nehalem and Nestucca River Basins TMDL DO 2013",
+                         "unknown")))
+
+
+
+write.csv(new_project_name_ordered, file = ("C:\\Users\\awithin\\Desktop\\masterlist.csv"))
